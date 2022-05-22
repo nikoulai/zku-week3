@@ -16,7 +16,6 @@ interface Keypair {
   privKey: PrivKey;
   pubKey: PubKey;
 }
-
 interface Ciphertext {
   // The initialisation vector
   iv: bigint;
@@ -66,6 +65,16 @@ const bigInt2Buffer = (i: BigInt): Buffer => {
   }
   return Buffer.from(hexStr, 'hex');
 };
+// const uintArrToBigInt = (arr: Uint8Array): bigint => {
+//   const length = BigInt(arr.length) - 1n;
+//   let bigint = BigInt(0);
+
+//   for (let i = BigInt(0); i <= length; i++) {
+//     bigint += BigInt(arr[Number(i)]) * (2n << ((length - i) * 8n - 1n));
+//   }
+
+//   return bigint;
+// };
 // The pubkey is the first Pedersen base point from iden3's circomlib
 // See https://github.com/iden3/circomlib/blob/d5ed1c3ce4ca137a6b3ca48bec4ac12c1b38957a/src/pedersen_printbases.js
 const NOTHING_UP_MY_SLEEVE_PUBKEY: PubKey = [
@@ -239,6 +248,25 @@ const encrypt = async (
 ): Promise<Ciphertext> => {
   const mimc7 = await buildMimc7();
   // [assignment] generate the IV, use Mimc7 to hash the shared key with the IV, then encrypt the plain text
+
+  // let mimc7 = await buildMimc7();
+  const iv = mimc7.multiHash(plaintext, BigInt(0));
+  console.log(iv);
+  console.log(typeof iv);
+  let F = mimc7.F;
+  const ciphertext: Ciphertext = {
+    iv: buf2Bigint(iv),
+    data: plaintext.map((e: bigint, i: number): bigint => {
+      return (
+        e +
+        buf2Bigint(
+          mimc7.hash(buf2Bigint(sharedKey), buf2Bigint(iv) + BigInt(i)),
+        )
+      );
+    }),
+  };
+
+  return ciphertext;
 };
 
 /*
@@ -250,6 +278,19 @@ const decrypt = async (
   sharedKey: EcdhSharedKey,
 ): Promise<Plaintext> => {
   // [assignment] use Mimc7 to hash the shared key with the IV, then descrypt the ciphertext
+  console.log('*******');
+  console.log(ciphertext);
+  console.log('*******');
+  const mimc7 = await buildMimc7();
+  const plaintext: Plaintext = ciphertext.data.map(
+    (e: bigint, i: number): bigint => {
+      let x = mimc7.hash(buf2Bigint(sharedKey), ciphertext.iv + BigInt(i));
+      console.log(x);
+      return e - buf2Bigint(x);
+    },
+  );
+
+  return plaintext;
 };
 
 export {
